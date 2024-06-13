@@ -1,6 +1,7 @@
 [submodule "gsrobotics"]
 	path = gsrobotics
 	url = https://github.com/JunJie-zhang-o/gsrobotics.git
+	branch = driverForMac
 [submodule "gripper"]
 	path = gripper
 	url = https://github.com/JunJie-zhang-o/ViTai_Gripper.git
