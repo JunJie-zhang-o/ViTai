@@ -5,16 +5,11 @@ import os
 from gelsight import gsdevice
 from gelsight import gs3drecon
 
+from Robotiq import HandEForRtu
+import time
 
-"""
-xmlrpc
-"""
-import xmlrpc.client
-proxy = xmlrpc.client.ServerProxy("http://192.168.40.216:9120")
-proxy.move(0,0,0,False)
-# proxy.move(50,0,0,False)
-
-
+port = "/dev/ttyUSB0"
+hande = HandEForRtu(port=port)
 
 def main(argv):
     # Set flags
@@ -32,10 +27,11 @@ def main(argv):
 
     # the device ID can change after unplugging and changing the usb ports.
     # on linux run, v4l2-ctl --list-devices, in the terminal to get the device ID for camera
-    dev = gsdevice.Camera("GelSight Mini")
+    dev = gsdevice.CameraThread("GelSight Mini")
+    dev.start()
+    time.sleep(3)
+    
     net_file_path = 'nnmini.pt'
-
-    dev.connect()
 
     ''' Load neural network '''
     model_file_path = path
@@ -50,7 +46,7 @@ def main(argv):
     nn = gs3drecon.Reconstruction3D(dev)
     net = nn.load_nn(net_path)
 
-    f0 = dev.get_raw_image()
+    f0 = dev.get_crop_frame()
     roi = (0, 0, f0.shape[1], f0.shape[0])
 
     if SAVE_VIDEO_FLAG:
@@ -91,18 +87,17 @@ def main(argv):
 
     flag = False
 
-    f1 = dev.get_image()
+    f1 = dev.get_crop_frame()
     bigframe = cv2.resize(f1, (f1.shape[1] * 2, f1.shape[0] * 2))
     lastFrame = bigframe
     try:
-        import time
         t1 = time.time()
         while dev.while_condition:
             t2 = time.time()
             # print(1 / (t2 - t1))
             t1 = t2
             # get the roi image
-            f1 = dev.get_image()
+            f1 = dev.get_crop_frame()
             t3 = time.time()
 
             bigframe = cv2.resize(f1, (f1.shape[1] * 2, f1.shape[0] * 2))
@@ -126,19 +121,19 @@ def main(argv):
                 break
             elif inputKey & 0xFF == ord('w'):
                 print("wwww")
-                proxy.move(0,0,0,False)
+                hande.move(0,0,0,False)
                 flag = False
             elif inputKey & 0xFF == ord('e'):
                 print("eeee")
-                proxy.move(50,0,0,False)
+                hande.move(50,0,0,False)
                 flag = True
             elif inputKey & 0xFF == ord('s'):
-                proxy.stop()
+                hande.stop()
                 flag = False
                 pass
             lastFrame = bigframe
             if diff > 20 and flag == True:
-                proxy.stop()
+                hande.stop()
                 flag = False
                 pass
 

@@ -10,13 +10,33 @@
 
 ### 文件结构 
 
+```
+.
+├── gelsight		--图像读取和深度图重建
+├── main1.py		--使用触觉图像和深度图像自适应夹取
+├── main2.py		--仅使用触觉图像夹取
+├── nnmini.pt
+├── README.MD
+├── requirements.txt
+├── Robotiq			--手爪控制代码
+└── utils
 
+```
 
 ### 如何使用
 
 #### 环境准备
 
+1. 创建并激活虚拟环境
 
+```shell
+conda env create --name ViTai
+conda activate ViTai
+```
+2. 按照requiremwnts.txt配置环境
+```shell
+pip install -r requirements.txt
+```
 
 #### 相关配置
 
@@ -24,3 +44,6 @@
 
 #### 启动
 
+```python
+python main1.py
+```

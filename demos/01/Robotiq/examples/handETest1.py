@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from Robotiq import HandEForRtu
 
 # you need to change serial port for your device
-port = "/dev/tty.usbserial-2120"
+port = "/dev/ttyUSB0"
 hande = HandEForRtu(port=port)
 time.sleep(1)
 while True:

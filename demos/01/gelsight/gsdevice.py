@@ -1,8 +1,9 @@
 import cv2
 import numpy as np
-import platform
 import os
 import re
+import threading
+import time
 
 def warp_perspective(img, corners, output_sz):
     TOPLEFT, TOPRIGHT, BOTTOMRIGHT, BOTTOMLEFT = corners
@@ -18,13 +19,13 @@ def get_camera_id(camera_name):
     cam_num = None
     if os.name == 'nt':
         cam_num = find_cameras_windows(camera_name)
-    elif platform.system() == "Darwin":
-        import usb.core
-        devices = usb.core.find(find_all=True)
-        for idx, device in enumerate(devices):
-            if camera_name in device.product:
-                cam_num = idx
-                break
+    # elif os.name == "posix":
+    #     import usb.core
+    #     devices = usb.core.find(find_all=True)
+    #     for idx, device in enumerate(devices):
+    #         if camera_name in device.product:
+    #             cam_num = idx
+    #             break
     else:
         for file in os.listdir("/sys/class/video4linux"):
             real_file = os.path.realpath("/sys/class/video4linux/" + file + "/name")
@@ -134,5 +135,137 @@ class Camera:
         cv2.destroyAllWindows()
 
 
+class CameraThread(threading.Thread):
+    def __init__(self, dev_type):
+        super().__init__(daemon=True)
+        # variable to store data
+        self.data = None
+        self.name = dev_type
+        self.dev_id = get_camera_id(dev_type)
+        self.imgw = 320 # this is for R1, R1.5 is 240
+        self.imgh = 240 # this is for R1, R1.5 is 320
+        self.cam = None
+        self.while_condition = 1
+        self.frame = None
+        self.frame_crop = None
+
+    def run(self):
+        self.connect()
+        self.start_video()
+
+    def connect(self):
+
+        # The camera in Mini is a USB camera and uses open cv to get the video data from the streamed video
+        self.cam = cv2.VideoCapture(self.dev_id)
+        if self.cam is None or not self.cam.isOpened():
+            print('Warning: unable to open video source: ', self.dev_id)
+        self.imgw = 240
+        self.imgh = 320
+
+        return self.cam
+
+    def get_raw_image(self):
+        for i in range(10): ## flush out fist 100 frames to remove black frames
+            ret, f0 = self.cam.read()
+        ret, f0 = self.cam.read()
+        if ret:
+            f0 = resize_crop_mini(f0,self.imgh,self.imgw)
+        else:
+            print('ERROR! reading image from camera')
+
+        self.data = f0
+        return self.data
 
 
+    def get_image(self):
+
+        ret, f0 = self.cam.read()
+        if ret:
+            f0 = resize_crop_mini(f0, self.imgh, self.imgw)
+        else:
+            print('ERROR! reading image from camera!')
+
+        self.data = f0
+        return self.data
+
+    def get_raw_frame(self):
+        return self.frame
+
+    def get_crop_frame(self):
+        return self.frame_crop
+    
+    def get_fps(self):
+        return self.fps
+
+    def save_image(self, fname):
+         cv2.imwrite(fname, self.data)
+
+    def start_video(self):
+        for _ in range(10): ## flush out fist 100 frames to remove black frames
+            ret, self.frame = self.cam.read()
+
+        start_time = time.time()
+        frame_count = 0
+        # the default while condition is set to 1, change it for R1.5
+        while( self.while_condition ):
+            ret, self.frame = self.cam.read()
+            if ret:
+                self.frame_crop = resize_crop_mini(self.frame, self.imgh, self.imgw)
+                frame_count += 1
+                current_time = time.time()
+            else:
+                print('ERROR! reading image from camera!')
+                break
+            
+            if current_time - start_time >= 1:  # 计算每秒的帧数
+                self.fps = frame_count
+                print(f"{self.name} -> Current fps: {self.fps}")
+                start_time = current_time
+                frame_count = 0
+
+
+    def stop_video(self):
+        cv2.destroyAllWindows()
+
+class GelsightThread(CameraThread):
+    def __init__(self, dev_type, device="/dev/video0", width=3280, height=2464, framerate=25):
+        super().__init__(dev_type)
+        # variable to store data
+        self.device = device
+        self.width = width
+        self.height = height
+        self.framerate = framerate
+
+        self.imgw = 320 # this is for R1, R1.5 is 240
+        self.imgh = 240 # this is for R1, R1.5 is 320
+        self.while_condition = 1
+
+    def connect(self):
+
+        # The camera in Mini is a USB camera and uses open cv to get the video data from the streamed video
+        self.cam = cv2.VideoCapture(f"v4l2src device={self.device} ! image/jpeg,format=MJPG,width={self.width},height={self.height},framerate={self.framerate}/1 ! nvv4l2decoder mjpeg=1 ! nvvidconv ! video/x-raw,format=BGRx ! appsink", cv2.CAP_GSTREAMER)
+        if self.cam is None or not self.cam.isOpened():
+            print('Warning: unable to open video source: ', self.device)
+        self.imgw = 240
+        self.imgh = 320
+
+        return self.cam
+
+
+# thread1 = CameraThread("GelSight Mini")
+
+# thread1.start()
+# time.sleep(3)
+# while(1):
+#     image = thread1.get_frame_crop()
+
+#     if image is not None:
+#         cv2.imshow('Image Window', image)
+        
+#     else:
+#         print("Error")
+
+#     if cv2.waitKey(1) & 0xFF == ord('q'):
+#         break
+        
+# cv2.destroyAllWindows()
